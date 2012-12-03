@@ -1,0 +1,87 @@
+<!-- Apache Ant script to process files with ITS 2.0 information. -->
+
+<!-- Input parameters: 1) list of data categories to be processed via ant parameter "datacategories". If "datacategories" parameter is not given, we fall back to all datacategories that are defined in datacategories-definition.xml 2) URI of inputfile via ant parameter "inputfile". 
+    - Sample call:
+    ant -Dinputfile=sample/translate/inputfile.xml -Ddatacategories='translate directionality'
+    The default output is a list of nodes in temp/nodelist-with-its-information.xml
+    - To generate an RDF representation, use 
+    ant -Dinputfile=sample/translate/inputfile.xml -Ddatacategories=translate nodelist-as-rdf
+    The RDF representation is stored in temp/nodelist-rdfxml.xml
+    - To generate inline annotations, use
+    ant -Dinputfile=sample/translate/inputfile.xml -Ddatacategories=translate inline-annotation
+ -->
+
+
+<project name="ITS20GENERATOR" default="main" basedir=".">
+    
+    <path id="saxon9.classpath">
+        <pathelement location="/home/leroy/Downloads/Saxon-HE-9.4.jar"/>
+    </path>
+       
+<!-- Task to generate intermediate XSLT. -->       
+    <target name="intermediate-xslt">
+        <copy file="${inputfile}" tofile="temp/inputfile.xml"/>
+        <java fork="true" classname="net.sf.saxon.Transform">
+            <classpath refid="saxon9.classpath"/>
+            <arg value="-o:temp/intermediate.xsl"/>
+            <arg value="tools/datacategories-definition.xml"/>            
+            <arg value="tools/datacategories-2-xsl.xsl"/>
+            <arg value="inputDatacats=${datacategories}"/>            
+            <arg value="inputDocUri=temp/inputfile.xml"/>
+        </java>
+    </target>
+
+    <!-- Task to generate a list of all element and attribute nodes in the input document, providing ITS information. Uses the intermediate XSLT generated via intermediate-xslt task.-->   
+    
+    <target name="nodelist" depends="intermediate-xslt">
+        <java fork="true" classname="net.sf.saxon.Transform">
+            <classpath refid="saxon9.classpath"/>
+            <arg value="-o:temp/nodelist-with-its-information.xml"/>
+            <arg value="temp/inputfile.xml"/>
+            <arg value="temp/intermediate.xsl"/>
+        </java>
+    </target>
+
+    <target name="nodelist-tab-delimited" depends="nodelist">
+        <java fork="true" classname="net.sf.saxon.Transform">
+            <classpath refid="saxon9.classpath"/>
+            <arg value="-o:temp/output.txt"/>
+            <arg value="temp/nodelist-with-its-information.xml"/>
+            <arg value="tools/tabdelimiting.xsl"/>
+        </java>
+    </target>
+
+    
+    <!-- Task to generate an RDF representation of the node list with ITS information. Generated from the XML representation provided via the nodelist task.-->   
+    <target name="nodelist-as-rdf" depends="nodelist">
+        <java fork="true" classname="net.sf.saxon.Transform">
+            <classpath refid="saxon9.classpath"/>
+            <arg value="-o:temp/nodelist-rdfxml.xml"/>
+            <arg value="temp/nodelist-with-its-information.xml"/>
+            <arg value="tools/generate-rdfxml.xsl"/>
+        </java>
+    </target>
+    
+    <!-- Task to generate annotations providing ITS information inline. Generated from the XML representation provided via the nodelist task. -->
+    <target name="inline-annotation" depends="nodelist">
+        <java fork="true" classname="net.sf.saxon.Transform">
+            <classpath refid="saxon9.classpath"/>
+            <arg value="-o:temp/output-inline-annotation.xml"/>
+            <arg value="temp/inputfile.xml"/>
+            <arg value="tools/datacategories-2-inline-annotations.xsl"/>
+        </java>
+    </target>
+       
+    <!-- Deleting temporary files. -->
+    <target name="clean">
+        <delete verbose="true">
+            <fileset dir="temp" includes="*"/>
+        </delete>
+    </target>
+    
+    <!-- Generating inline annotations and the RDF nodelist representation. -->
+    <target name="all" depends="inline-annotation, nodelist-as-rdf"/>
+   
+    <!-- Generating the nodelist. -->
+    <target name="main" depends="nodelist"/>
+</project>
